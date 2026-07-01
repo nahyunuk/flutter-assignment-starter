@@ -35,7 +35,7 @@ flutter_*.log
 pubspec_overrides.yaml
 
 # Generated golden failure artifacts
-/test/goldens/failures/
+**/goldens/failures/
 
 # Swift / Xcode / CocoaPods
 .build/

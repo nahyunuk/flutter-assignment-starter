@@ -207,13 +207,17 @@ class NaverDomesticStockClient implements NaverStockDataClient {
   }
 }
 
+// 실제 응답은 onMouseOver(카멜케이스)로 내려오므로 대소문자 구분 없이 매칭한다.
 final RegExp _siseDayRowPattern = RegExp(
-  r'<tr onmouseover="mouseOver\(this\)"[^>]*>(.*?)</tr>',
+  r'<tr onmouseover="mouseover\(this\)"[^>]*>(.*?)</tr>',
   dotAll: true,
+  caseSensitive: false,
 );
 final RegExp _siseDaySpanPattern = RegExp(r'<span[^>]*>([^<]*)</span>');
+// href의 &가 &amp;로 인코딩되어 있어 "?page=" / "&page=" 리터럴과 매칭되지 않는다.
+// pgRR 앵커 안이라는 문맥으로 이미 범위가 좁혀지므로 "page=" 앞 구분자는 요구하지 않는다.
 final RegExp _siseDayLastPagePattern = RegExp(
-  r'class="pgRR"[^>]*>\s*<a[^>]*href="[^"]*[?&]page=(\d+)"',
+  r'class="pgRR"[^>]*>\s*<a[^>]*href="[^"]*page=(\d+)"',
   dotAll: true,
 );
 

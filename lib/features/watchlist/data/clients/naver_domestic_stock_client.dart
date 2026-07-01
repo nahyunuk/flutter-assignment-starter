@@ -88,65 +88,91 @@ class NaverDomesticStockClient implements NaverStockDataClient {
 
   @override
   Future<List<NaverAutocompleteItemDto>> searchStocks(String query) async {
-    // TODO(assignment): Implement the Naver autocomplete request.
-    //
-    // Goal:
-    // - Call https://ac.stock.naver.com/ac with Dio.
-    // - Send q=<query> and target=stock,ipo,index,marketindicator.
-    // - Use _defaultHeaders and ResponseType.plain because the response body
-    //   may arrive as a String instead of a decoded JSON map.
-    // - Decode the response with _decodeJsonObjectBody.
-    // - Read the "items" array and map each entry with
-    //   NaverAutocompleteItemDto.fromJson.
-    //
-    // Related tests:
-    // - test/features/watchlist/data/naver_stock_dtos_test.dart
-    // - test/features/watchlist/data/naver_watchlist_repository_test.dart
-    throw UnimplementedError(
-      'TODO(assignment): implement NaverDomesticStockClient.searchStocks',
+    // 자동완성 응답이 문자열 그대로 오는 경우가 있어 ResponseType.plain으로 받고
+    // _decodeJsonObjectBody에서 문자열/바이트/맵을 모두 흡수하도록 위임한다.
+    final response = await _dio.get<Object?>(
+      'https://ac.stock.naver.com/ac',
+      queryParameters: {
+        'q': query,
+        'target': 'stock,ipo,index,marketindicator',
+      },
+      options: Options(
+        headers: _defaultHeaders,
+        responseType: ResponseType.plain,
+      ),
     );
+
+    final body = _decodeJsonObjectBody(response.data, 'Naver autocomplete');
+    final rawItems = body['items'];
+    if (rawItems is! List) {
+      return const [];
+    }
+
+    return rawItems
+        .map(
+          (item) => NaverAutocompleteItemDto.fromJson(
+            _asStringKeyedMap(item, 'Naver autocomplete item'),
+          ),
+        )
+        .toList(growable: false);
   }
 
   @override
   Future<Map<String, NaverRealtimeQuoteDto>> fetchRealtimeQuotes(
     Iterable<String> symbols,
   ) async {
-    // TODO(assignment): Implement the Naver realtime quote request.
-    //
-    // Goal:
-    // - Deduplicate the incoming symbols.
-    // - Return an empty map when there is nothing to request.
-    // - Build query=SERVICE_ITEM:005930,000660 style payload.
-    // - Call https://polling.finance.naver.com/api/realtime.
-    // - Decode the JSON body, then traverse result -> areas -> datas.
-    // - Convert each realtime row with NaverRealtimeQuoteDto.fromJson.
-    // - Return a map keyed by the six-digit domestic symbol.
-    //
-    // Note:
-    // - The response body may be plain text JSON, so use ResponseType.plain.
-    // - Some tests use a fake client, but the real app depends on this method.
-    throw UnimplementedError(
-      'TODO(assignment): implement NaverDomesticStockClient.fetchRealtimeQuotes',
+    final uniqueSymbols = symbols.toSet();
+    if (uniqueSymbols.isEmpty) {
+      return const {};
+    }
+
+    // 2024-04 커밋에서 확인한 대로 실제 포맷은 SERVICE_ITEM 접두어 한 번에
+    // 종목코드를 콤마로 이어붙이는 형태다 (파이프로 접두어를 반복하지 않음).
+    final response = await _dio.get<Object?>(
+      'https://polling.finance.naver.com/api/realtime',
+      queryParameters: {'query': 'SERVICE_ITEM:${uniqueSymbols.join(',')}'},
+      options: Options(
+        headers: _defaultHeaders,
+        responseType: ResponseType.plain,
+      ),
     );
+
+    final body = _decodeJsonObjectBody(response.data, 'Naver realtime quote');
+    final result = _asStringKeyedMap(body['result'], 'Naver realtime result');
+    final rawAreas = result['areas'];
+    if (rawAreas is! List) {
+      return const {};
+    }
+
+    final quotes = <String, NaverRealtimeQuoteDto>{};
+    for (final rawArea in rawAreas) {
+      final area = _asStringKeyedMap(rawArea, 'Naver realtime area');
+      final rawDatas = area['datas'];
+      if (rawDatas is! List) {
+        continue;
+      }
+      for (final rawData in rawDatas) {
+        final quote = NaverRealtimeQuoteDto.fromJson(
+          _asStringKeyedMap(rawData, 'Naver realtime data'),
+        );
+        quotes[quote.symbol] = quote;
+      }
+    }
+
+    return quotes;
   }
 
   @override
   Future<NaverChartMetadataDto> fetchChartMetadata(String symbol) async {
-    // TODO(assignment): Implement the chart metadata request.
-    //
-    // Goal:
-    // - Call
-    //   https://stock.naver.com/api/securityFe/api/fchart/domestic/stock/{symbol}
-    // - Decode the JSON object with _decodeJsonObjectBody.
-    // - Convert the payload with NaverChartMetadataDto.fromJson.
-    //
-    // Required fields for the DTO:
-    // - symbolCode
-    // - stockName
-    // - stockExchangeNameKor
-    throw UnimplementedError(
-      'TODO(assignment): implement NaverDomesticStockClient.fetchChartMetadata',
+    // 이 엔드포인트는 항상 단일 JSON 객체를 반환하므로 별도 wrapper 탐색 없이
+    // 바로 디코드해서 DTO로 변환한다.
+    final response = await _dio.get<Object?>(
+      'https://stock.naver.com/api/securityFe/api/fchart/domestic/stock/$symbol',
+      options: Options(headers: _defaultHeaders),
     );
+
+    final body = _decodeJsonObjectBody(response.data, 'Naver chart metadata');
+    return NaverChartMetadataDto.fromJson(body);
   }
 
   @override
@@ -154,30 +180,79 @@ class NaverDomesticStockClient implements NaverStockDataClient {
     required String symbol,
     required int page,
   }) async {
-    // TODO(assignment): Implement parsing for the legacy daily history page.
-    //
-    // Goal:
-    // - Validate that page >= 1.
-    // - Request https://finance.naver.com/item/sise_day.naver
-    //   with code=<symbol> and page=<page>.
-    // - Use ResponseType.bytes and decode the HTML with latin1.
-    // - Parse one page of historical rows from the HTML table.
-    // - For each row, extract:
-    //   - localDate (yyyyMMdd)
-    //   - closePrice
-    //   - openPrice
-    //   - highPrice
-    //   - lowPrice
-    //   - accumulatedTradingVolume
-    // - Also extract lastPage from the pagination area.
-    //
-    // Hint:
-    // - The rendered table order is close, change, open, high, low, volume.
-    // - You can keep using NaverHistoricalPriceDto.fromJson to build rows.
-    throw UnimplementedError(
-      'TODO(assignment): implement NaverDomesticStockClient.fetchDailyHistoryPage',
+    if (page < 1) {
+      throw ArgumentError.value(page, 'page', 'page must be >= 1');
+    }
+
+    // 이 응답은 JSON이 아니라 EUC-KR 계열 HTML이라 바이트 그대로 받아서
+    // latin1으로 디코드한다. 숫자/날짜 칸은 ASCII라 latin1로도 안전하게 읽히고,
+    // 한글이 깨지더라도 이 메서드가 실제로 필요로 하는 값에는 영향이 없다.
+    final response = await _dio.get<List<int>>(
+      'https://finance.naver.com/item/sise_day.naver',
+      queryParameters: {'code': symbol, 'page': page},
+      options: Options(
+        headers: _defaultHeaders,
+        responseType: ResponseType.bytes,
+      ),
+    );
+
+    final html = latin1.decode(response.data ?? const []);
+
+    return NaverDailyHistoryPageDto(
+      symbol: symbol,
+      page: page,
+      lastPage: _parseSiseDayLastPage(html),
+      priceInfos: _parseSiseDayRows(html),
     );
   }
+}
+
+final RegExp _siseDayRowPattern = RegExp(
+  r'<tr onmouseover="mouseOver\(this\)"[^>]*>(.*?)</tr>',
+  dotAll: true,
+);
+final RegExp _siseDaySpanPattern = RegExp(r'<span[^>]*>([^<]*)</span>');
+final RegExp _siseDayLastPagePattern = RegExp(
+  r'class="pgRR"[^>]*>\s*<a[^>]*href="[^"]*[?&]page=(\d+)"',
+  dotAll: true,
+);
+
+// 표의 한 행은 span 7개(날짜, 종가, 전일비, 시가, 고가, 저가, 거래량) 순서로
+// 렌더링된다. 전일비(index 2)는 이미 changeRate 계산에 쓰지 않으므로 건너뛴다.
+List<NaverHistoricalPriceDto> _parseSiseDayRows(String html) {
+  final rows = <NaverHistoricalPriceDto>[];
+
+  for (final rowMatch in _siseDayRowPattern.allMatches(html)) {
+    final spans = _siseDaySpanPattern
+        .allMatches(rowMatch.group(1)!)
+        .map((match) => match.group(1)!.trim())
+        .toList(growable: false);
+
+    if (spans.length < 7 || spans.any((value) => value.isEmpty)) {
+      continue;
+    }
+
+    rows.add(
+      NaverHistoricalPriceDto.fromJson({
+        'localDate': spans[0].replaceAll('.', ''),
+        'closePrice': spans[1],
+        'openPrice': spans[3],
+        'highPrice': spans[4],
+        'lowPrice': spans[5],
+        'accumulatedTradingVolume': spans[6],
+      }),
+    );
+  }
+
+  return rows;
+}
+
+int _parseSiseDayLastPage(String html) {
+  final match = _siseDayLastPagePattern.firstMatch(html);
+  if (match == null) {
+    return 1;
+  }
+  return int.parse(match.group(1)!);
 }
 
 double _parseDouble(String value) {

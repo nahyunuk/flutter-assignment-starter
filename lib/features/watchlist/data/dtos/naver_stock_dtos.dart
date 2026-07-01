@@ -14,19 +14,16 @@ class NaverAutocompleteItemDto {
   });
 
   factory NaverAutocompleteItemDto.fromJson(Map<String, dynamic> json) {
-    // TODO(assignment): Read the autocomplete fields from json and create the
-    // DTO. See README.md for the expected Naver endpoint and sample payload.
-    //
-    // Required fields:
-    // - code
-    // - name
-    // - typeCode
-    // - typeName
-    // - url
-    // - nationCode
-    // - category
-    throw UnimplementedError(
-      'TODO(assignment): implement NaverAutocompleteItemDto.fromJson',
+    // Naver autocomplete 응답의 키가 모델 필드명과 1:1로 대응해서 별도 매핑 없이
+    // _readString으로 그대로 읽는다. (빈 문자열/누락 값은 FormatException으로 방어)
+    return NaverAutocompleteItemDto(
+      code: _readString(json['code']),
+      name: _readString(json['name']),
+      typeCode: _readString(json['typeCode']),
+      typeName: _readString(json['typeName']),
+      url: _readString(json['url']),
+      nationCode: _readString(json['nationCode']),
+      category: _readString(json['category']),
     );
   }
 
@@ -58,19 +55,18 @@ class NaverRealtimeQuoteDto {
   });
 
   factory NaverRealtimeQuoteDto.fromJson(Map<String, dynamic> json) {
-    // TODO(assignment): Map the realtime quote payload into this DTO.
-    //
-    // Naver keys used by the solution:
-    // - cd: symbol
-    // - nv: current price
-    // - pcv: previous close
-    // - ov: open price
-    // - hv: high price
-    // - lv: low price
-    // - aq: accumulated trading volume
-    // - countOfListedStock: listed share count (optional)
-    throw UnimplementedError(
-      'TODO(assignment): implement NaverRealtimeQuoteDto.fromJson',
+    // 실시간 시세 응답은 축약된 키(cd/nv/pcv 등)를 쓰므로 의미가 드러나는 필드명으로
+    // 옮겨 담는다. countOfListedStock은 응답에 없을 수 있어 _readNullableInt로 읽고
+    // 없으면 시가총액 계산에서 0으로 처리되도록 0을 기본값으로 둔다.
+    return NaverRealtimeQuoteDto(
+      symbol: _readString(json['cd']),
+      currentPrice: _readDouble(json['nv']),
+      previousClose: _readDouble(json['pcv']),
+      openPrice: _readDouble(json['ov']),
+      highPrice: _readDouble(json['hv']),
+      lowPrice: _readDouble(json['lv']),
+      accumulatedTradingVolume: _readInt(json['aq']),
+      countOfListedStock: _readNullableInt(json['countOfListedStock']) ?? 0,
     );
   }
 
@@ -105,9 +101,12 @@ class NaverChartMetadataDto {
   });
 
   factory NaverChartMetadataDto.fromJson(Map<String, dynamic> json) {
-    // TODO(assignment): Map the chart metadata payload into this DTO.
-    throw UnimplementedError(
-      'TODO(assignment): implement NaverChartMetadataDto.fromJson',
+    // fchart 메타데이터 응답의 symbolCode를 symbol로 옮겨 다른 DTO와 네이밍을
+    // 통일한다(나머지 두 필드는 응답 키와 이름이 같음).
+    return NaverChartMetadataDto(
+      symbol: _readString(json['symbolCode']),
+      stockName: _readString(json['stockName']),
+      stockExchangeNameKor: _readString(json['stockExchangeNameKor']),
     );
   }
 
@@ -127,9 +126,15 @@ class NaverHistoricalPriceDto {
   });
 
   factory NaverHistoricalPriceDto.fromJson(Map<String, dynamic> json) {
-    // TODO(assignment): Parse one historical OHLCV row.
-    throw UnimplementedError(
-      'TODO(assignment): implement NaverHistoricalPriceDto.fromJson',
+    // 일별 시세 값들은 쉼표 포함 숫자 문자열로 올 수 있어 _readDouble/_readInt를
+    // 사용하고, localDate(yyyyMMdd)는 _readLocalDate로 정규화한 DateTime으로 만든다.
+    return NaverHistoricalPriceDto(
+      localDate: _readLocalDate(json['localDate']),
+      closePrice: _readDouble(json['closePrice']),
+      openPrice: _readDouble(json['openPrice']),
+      highPrice: _readDouble(json['highPrice']),
+      lowPrice: _readDouble(json['lowPrice']),
+      accumulatedTradingVolume: _readInt(json['accumulatedTradingVolume']),
     );
   }
 
@@ -149,10 +154,23 @@ class NaverHistoricalChartDto {
   });
 
   factory NaverHistoricalChartDto.fromJson(Map<String, dynamic> json) {
-    // TODO(assignment): Parse the chart wrapper and convert each priceInfos
-    // entry with NaverHistoricalPriceDto.fromJson.
-    throw UnimplementedError(
-      'TODO(assignment): implement NaverHistoricalChartDto.fromJson',
+    // 차트 래퍼는 종목코드를 code 키로 내려주고, priceInfos는 각 행을
+    // NaverHistoricalPriceDto.fromJson으로 변환해 리스트로 모은다.
+    final rawPriceInfos = json['priceInfos'];
+    final priceInfos = rawPriceInfos is List
+        ? rawPriceInfos
+              .map(
+                (entry) => NaverHistoricalPriceDto.fromJson(
+                  entry as Map<String, dynamic>,
+                ),
+              )
+              .toList(growable: false)
+        : const <NaverHistoricalPriceDto>[];
+
+    return NaverHistoricalChartDto(
+      symbol: _readString(json['code']),
+      periodType: _readString(json['periodType']),
+      priceInfos: priceInfos,
     );
   }
 

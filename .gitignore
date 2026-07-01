@@ -68,3 +68,6 @@ app.*.map.json
 
 # Legacy / migration
 migrate_working_dir/
+
+# OMC tool state
+.omc/

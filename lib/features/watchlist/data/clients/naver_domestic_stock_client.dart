@@ -213,7 +213,9 @@ final RegExp _siseDayRowPattern = RegExp(
   dotAll: true,
   caseSensitive: false,
 );
-final RegExp _siseDaySpanPattern = RegExp(r'<span[^>]*>([^<]*)</span>');
+// 전일비 셀에는 스크린리더 전용 <span class="blind">상승/하락</span>이 숨어 있어
+// class="tah..."인 실제 표시용 span만 매칭해야 인덱스가 밀리지 않는다.
+final RegExp _siseDaySpanPattern = RegExp(r'<span class="tah[^"]*"[^>]*>([^<]*)</span>');
 // href의 &가 &amp;로 인코딩되어 있어 "?page=" / "&page=" 리터럴과 매칭되지 않는다.
 // pgRR 앵커 안이라는 문맥으로 이미 범위가 좁혀지므로 "page=" 앞 구분자는 요구하지 않는다.
 final RegExp _siseDayLastPagePattern = RegExp(
